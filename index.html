@@ -1,173 +1,336 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-
-const CalculateurHonoraires = () => {
-  const [montantCommissionTTC, setMontantCommissionTTC] = useState(5700);
-  const [sortieMandat, setSortieMandat] = useState('oui');
-  const [apporteur, setApporteur] = useState('0');
-  const [acre, setAcre] = useState(false);
-  const [tauxURSSAFPersonnalise, setTauxURSSAFPersonnalise] = useState('');
-  const [resultat, setResultat] = useState(null);
-
-  // Effet pour ajuster le nombre d'apporteurs selon la règle de partage
-  useEffect(() => {
-    const maxApporteurs = sortieMandat === 'oui' ? 1 : 2;
-    if (parseInt(apporteur) > maxApporteurs) {
-      setApporteur('0');
-    }
-  }, [sortieMandat, apporteur]);
-
-  const calculerHonoraires = () => {
-    // Conversion TTC vers HT
-    let honorairesHT = montantCommissionTTC / 1.20;
-    
-    // Calcul de la part des apporteurs sur le montant total HT
-    let nbApporteurs = parseInt(apporteur);
-    let partApporteurs = honorairesHT * 0.12 * nbApporteurs;
-    
-    // Division par 2 si partage
-    if (sortieMandat === 'oui') {
-      honorairesHT = honorairesHT / 2;
-    }
-    
-    // Calcul de la part IAD sur le montant après partage
-    let partIAD = honorairesHT * 0.31;
-    
-    // Honoraires bruts = honoraires HT (après partage) - part IAD - part apporteurs
-    let honoraires = honorairesHT - partIAD - partApporteurs;
-
-    // Calcul des cotisations URSSAF
-    let tauxURSSAF;
-    if (tauxURSSAFPersonnalise && tauxURSSAFPersonnalise !== '') {
-      tauxURSSAF = parseFloat(tauxURSSAFPersonnalise) / 100;
-    } else {
-      tauxURSSAF = acre ? 0.123 : 0.261;
-    }
-    let cotisationsURSSAF = honoraires * tauxURSSAF;
-
-    // Montant net après cotisations URSSAF
-    let montantNetApresURSSAF = honoraires - cotisationsURSSAF;
-
-    setResultat({
-      commissionBase: montantCommissionTTC,
-      commissionHT: honorairesHT,
-      partApporteurs,
-      partIAD,
-      honoraires,
-      cotisationsURSSAF,
-      montantNetApresURSSAF,
-      nbApporteurs
-    });
-  };
-
-  // Générer les options d'apporteurs selon la règle de partage
-  const getApporteursOptions = () => {
-    const maxApporteurs = sortieMandat === 'oui' ? 1 : 2;
-    const options = [];
-    for (let i = 0; i <= maxApporteurs; i++) {
-      options.push(
-        <SelectItem key={i} value={i.toString()}>{i}</SelectItem>
-      );
-    }
-    return options;
-  };
-
-  return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <h2 className="text-2xl font-bold">Calculateur d'Honoraires</h2>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="montant">Honoraires totaux TTC (€)</Label>
-            <Input
-              id="montant"
-              type="number"
-              value={montantCommissionTTC}
-              onChange={(e) => setMontantCommissionTTC(parseFloat(e.target.value))}
-              min="0"
-              step="100"
-            />
-          </div>
-
-          <div>
-            <Label>Partage ?</Label>
-            <RadioGroup value={sortieMandat} onValueChange={setSortieMandat}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="oui" id="oui" />
-                <Label htmlFor="oui">Oui</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="non" id="non" />
-                <Label htmlFor="non">Non</Label>
-              </div>
-            </RadioGroup>
-          </div>
-
-          <div>
-            <Label htmlFor="apporteurs">
-              Nombre d'apporteurs (max {sortieMandat === 'oui' ? '1' : '2'})
-            </Label>
-            <Select value={apporteur} onValueChange={setApporteur}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {getApporteursOptions()}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox id="acre" checked={acre} onCheckedChange={setAcre} />
-            <Label htmlFor="acre">ACRE (Aide à la Création ou à la Reprise d'une Entreprise)</Label>
-          </div>
-
-          <div>
-            <Label htmlFor="taux-urssaf">Taux URSSAF personnalisé (%)</Label>
-            <Input
-              id="taux-urssaf"
-              type="number"
-              value={tauxURSSAFPersonnalise}
-              onChange={(e) => setTauxURSSAFPersonnalise(e.target.value)}
-              placeholder="Laissez vide pour utiliser le taux automatique"
-              min="0"
-              max="100"
-              step="0.1"
-            />
-            <p className="text-sm text-gray-600 mt-1">
-              {tauxURSSAFPersonnalise ? 
-                `Taux personnalisé : ${tauxURSSAFPersonnalise}%` : 
-                `Taux automatique : ${acre ? '12,3%' : '26,1%'}`
-              }
-            </p>
-          </div>
-
-          <Button onClick={calculerHonoraires}>Calculer les honoraires</Button>
-
-          {resultat && (
-            <div className="mt-4 p-4 bg-gray-100 rounded">
-              <h3 className="font-bold">Résultats :</h3>
-              <p>Commission TTC : {resultat.commissionBase.toFixed(2)} €</p>
-              <p>Commission HT : {resultat.commissionHT.toFixed(2)} €</p>
-              <p>Part des apporteurs ({resultat.nbApporteurs} × 12%) : {resultat.partApporteurs.toFixed(2)} €</p>
-              <p>Part reversée à IAD : {resultat.partIAD.toFixed(2)} €</p>
-              <p>Honoraires bruts : {resultat.honoraires.toFixed(2)} €</p>
-              <p>Cotisations URSSAF : {resultat.cotisationsURSSAF.toFixed(2)} €</p>
-              <p className="font-bold">Montant net après URSSAF : {resultat.montantNetApresURSSAF.toFixed(2)} €</p>
-            </div>
-          )}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculateur d'Honoraires IAD</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 500px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+        }
+        
+        .card-header {
+            margin-bottom: 24px;
+            border-bottom: 1px solid #e5e5e5;
+            padding-bottom: 16px;
+        }
+        
+        .card-header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        input[type="number"], select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        input[type="number"]:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            ring: 2px solid rgba(59, 130, 246, 0.2);
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+        }
+        
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .checkbox-item input[type="checkbox"] {
+            width: auto;
+            margin-top: 2px;
+        }
+        
+        .checkbox-item label {
+            margin: 0;
+            line-height: 1.4;
+        }
+        
+        button {
+            width: 100%;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            margin-top: 8px;
+        }
+        
+        button:hover {
+            background-color: #2563eb;
+        }
+        
+        .results {
+            margin-top: 24px;
+            padding: 16px;
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        
+        .results h3 {
+            margin: 0 0 12px 0;
+            font-weight: bold;
+            color: #1f2937;
+        }
+        
+        .results p {
+            margin: 4px 0;
+            font-size: 14px;
+            color: #4b5563;
+        }
+        
+        .results .final-amount {
+            font-weight: bold;
+            color: #1f2937;
+            font-size: 16px;
+            margin-top: 8px;
+        }
+        
+        .helper-text {
+            font-size: 12px;
+            color: #6b7280;
+            margin-top: 4px;
+        }
+        
+        .dynamic-label {
+            color: #6b7280;
+            font-weight: normal;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="card-header">
+            <h2>Calculateur d'Honoraires</h2>
         </div>
-      </CardContent>
-    </Card>
-  );
-};
+        
+        <div>
+            <div class="form-group">
+                <label for="montant">Honoraires totaux TTC (€)</label>
+                <input type="number" id="montant" value="5700" min="0" step="100">
+            </div>
 
-export default CalculateurHonoraires;
+            <div class="form-group">
+                <label>Partage ?</label>
+                <div class="radio-group">
+                    <div class="radio-item">
+                        <input type="radio" id="partage-oui" name="partage" value="oui" checked>
+                        <label for="partage-oui">Oui</label>
+                    </div>
+                    <div class="radio-item">
+                        <input type="radio" id="partage-non" name="partage" value="non">
+                        <label for="partage-non">Non</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="apporteurs">
+                    Nombre d'apporteurs 
+                    <span class="dynamic-label" id="max-apporteurs">(max 1)</span>
+                </label>
+                <select id="apporteurs">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="acre">
+                    <label for="acre">ACRE (Aide à la Création ou à la Reprise d'une Entreprise)</label>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="taux-urssaf">Taux URSSAF personnalisé (%)</label>
+                <input type="number" id="taux-urssaf" placeholder="Laissez vide pour utiliser le taux automatique" min="0" max="100" step="0.1">
+                <div class="helper-text" id="taux-info">Taux automatique : 26,1%</div>
+            </div>
+
+            <button onclick="calculerHonoraires()">Calculer les honoraires</button>
+
+            <div id="results" class="results" style="display: none;">
+                <h3>Résultats :</h3>
+                <div id="results-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let partageActuel = 'oui';
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', function() {
+            // Gestion du changement de partage
+            document.querySelectorAll('input[name="partage"]').forEach(radio => {
+                radio.addEventListener('change', gererPartage);
+            });
+
+            // Gestion du taux URSSAF
+            document.getElementById('taux-urssaf').addEventListener('input', mettreAJourTauxInfo);
+            document.getElementById('acre').addEventListener('change', mettreAJourTauxInfo);
+
+            // Initialisation
+            gererPartage();
+            mettreAJourTauxInfo();
+        });
+
+        function gererPartage() {
+            const partageRadios = document.querySelectorAll('input[name="partage"]');
+            let nouveauPartage = '';
+            
+            partageRadios.forEach(radio => {
+                if (radio.checked) {
+                    nouveauPartage = radio.value;
+                }
+            });
+
+            if (nouveauPartage !== partageActuel) {
+                partageActuel = nouveauPartage;
+                mettreAJourApporteurs();
+            }
+        }
+
+        function mettreAJourApporteurs() {
+            const selectApporteurs = document.getElementById('apporteurs');
+            const maxApporteursLabel = document.getElementById('max-apporteurs');
+            const valeurActuelle = parseInt(selectApporteurs.value);
+            
+            // Déterminer le maximum selon la règle
+            const maxApporteurs = partageActuel === 'oui' ? 1 : 2;
+            
+            // Mettre à jour le label
+            maxApporteursLabel.textContent = `(max ${maxApporteurs})`;
+            
+            // Vider les options
+            selectApporteurs.innerHTML = '';
+            
+            // Ajouter les nouvelles options
+            for (let i = 0; i <= maxApporteurs; i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = i;
+                selectApporteurs.appendChild(option);
+            }
+            
+            // Réajuster la valeur si nécessaire
+            if (valeurActuelle > maxApporteurs) {
+                selectApporteurs.value = '0';
+            } else {
+                selectApporteurs.value = valeurActuelle.toString();
+            }
+        }
+
+        function mettreAJourTauxInfo() {
+            const tauxPersonnalise = document.getElementById('taux-urssaf').value;
+            const acre = document.getElementById('acre').checked;
+            const tauxInfo = document.getElementById('taux-info');
+            
+            if (tauxPersonnalise && tauxPersonnalise !== '') {
+                tauxInfo.textContent = `Taux personnalisé : ${tauxPersonnalise}%`;
+            } else {
+                const tauxAuto = acre ? '12,3%' : '26,1%';
+                tauxInfo.textContent = `Taux automatique : ${tauxAuto}`;
+            }
+        }
+
+        function calculerHonoraires() {
+            // Récupération des valeurs
+            const montantCommissionTTC = parseFloat(document.getElementById('montant').value) || 0;
+            const partageRadios = document.querySelectorAll('input[name="partage"]');
+            let sortieMandat = '';
+            partageRadios.forEach(radio => {
+                if (radio.checked) sortieMandat = radio.value;
+            });
+            const nbApporteurs = parseInt(document.getElementById('apporteurs').value) || 0;
+            const acre = document.getElementById('acre').checked;
+            const tauxPersonnalise = document.getElementById('taux-urssaf').value;
+
+            // Calculs
+            let honorairesHT = montantCommissionTTC / 1.20;
+            let partApporteurs = honorairesHT * 0.12 * nbApporteurs;
+            
+            if (sortieMandat === 'oui') {
+                honorairesHT = honorairesHT / 2;
+            }
+            
+            let partIAD = honorairesHT * 0.31;
+            let honoraires = honorairesHT - partIAD - partApporteurs;
+
+            let tauxURSSAF;
+            if (tauxPersonnalise && tauxPersonnalise !== '') {
+                tauxURSSAF = parseFloat(tauxPersonnalise) / 100;
+            } else {
+                tauxURSSAF = acre ? 0.123 : 0.261;
+            }
+            
+            let cotisationsURSSAF = honoraires * tauxURSSAF;
+            let montantNetApresURSSAF = honoraires - cotisationsURSSAF;
+
+            // Affichage des résultats
+            const resultsDiv = document.getElementById('results');
+            const resultsContent = document.getElementById('results-content');
+            
+            resultsContent.innerHTML = `
+                <p>Commission TTC : ${montantCommissionTTC.toFixed(2)} €</p>
+                <p>Commission HT : ${honorairesHT.toFixed(2)} €</p>
+                <p>Part des apporteurs (${nbApporteurs} × 12%) : ${partApporteurs.toFixed(2)} €</p>
+                <p>Part reversée à IAD : ${partIAD.toFixed(2)} €</p>
+                <p>Honoraires bruts : ${honoraires.toFixed(2)} €</p>
+                <p>Cotisations URSSAF : ${cotisationsURSSAF.toFixed(2)} €</p>
+                <p class="final-amount">Montant net après URSSAF : ${montantNetApresURSSAF.toFixed(2)} €</p>
+            `;
+            
+            resultsDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
